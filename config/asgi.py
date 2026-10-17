@@ -1,5 +1,6 @@
 import os
 
+from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
 
@@ -7,13 +8,17 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")
 
 django_asgi_app = get_asgi_application()
 
-# Qurilmalar (devices) va signaling consumer'lari keyingi bosqichlarda
-# shu websocket_urlpatterns ro'yxatiga qo'shiladi.
-websocket_urlpatterns = []
+# Har bir app o'z websocket_urlpatterns'ini qo'shadi (signaling — 5-bosqichda).
+from apps.devices.routing import websocket_urlpatterns as device_urlpatterns  # noqa: E402
+
+websocket_urlpatterns = [*device_urlpatterns]
 
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
-        "websocket": URLRouter(websocket_urlpatterns),
+        # AuthMiddlewareStack — Django sessiya cookie'sidan scope["user"]ni
+        # to'ldiradi, shuning uchun consumer'lar HTTP login bilan bir xil
+        # foydalanuvchini ko'radi.
+        "websocket": AuthMiddlewareStack(URLRouter(websocket_urlpatterns)),
     }
 )

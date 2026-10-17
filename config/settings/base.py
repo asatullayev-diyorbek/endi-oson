@@ -18,6 +18,11 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_BOT_USERNAME = os.environ.get("TELEGRAM_BOT_USERNAME", "")
 
 INSTALLED_APPS = [
+    # Channels hujjatlariga ko'ra "channels" INSTALLED_APPS ro'yxatining
+    # boshida turishi kerak. Lokal WebSocket test uchun `daphne
+    # config.asgi:application` ishlatiladi — `manage.py runserver` faqat
+    # WSGI (HTTP) so'rovlarini qabul qiladi.
+    "channels",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -25,9 +30,10 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
-    "channels",
     "apps.accounts",
     "apps.telegram_auth",
+    "apps.devices",
+    "apps.transfers",
 ]
 
 MIDDLEWARE = [

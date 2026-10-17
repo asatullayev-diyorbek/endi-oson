@@ -10,3 +10,4 @@ venv/
 staticfiles/
 media/
 .DS_Store
+dump.rdb

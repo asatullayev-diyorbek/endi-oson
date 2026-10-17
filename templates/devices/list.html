@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Mening qurilmalarim — Endi Oson{% endblock %}
+
+{% block content %}
+  <h1>Mening qurilmalarim</h1>
+  <p id="connection-status">Ulanmoqda...</p>
+
+  <ul id="device-list" class="device-list"></ul>
+  <p id="connection-log"></p>
+  <div id="incoming-request" hidden></div>
+
+  <form id="rename-form">
+    <input id="rename-input" type="text" maxlength="128" placeholder="Shu qurilmaga nom bering">
+    <button type="submit" class="btn">Saqlash</button>
+  </form>
+
+  <script src="/static/js/devices.js"></script>
+{% endblock %}

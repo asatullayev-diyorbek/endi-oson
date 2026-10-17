@@ -5,11 +5,13 @@ Qurilmalar orasida fayllarni **100% lokal tarmoq** ichida uzatish xizmati,
 
 To'liq implementatsiya rejasi: `docs/PLAN.md`.
 
-## Hozirgi holat (0–2-bosqich)
+## Hozirgi holat (0–4-bosqich)
 
-- Django loyiha skeleti (ASGI, Channels tayyor, custom `User` modeli).
+- Django loyiha skeleti (ASGI, Channels, custom `User` modeli).
 - Telegram orqali bir martalik token login oqimi: `/auth/telegram/login/`.
-- Qurilmalar, signaling va fayl uzatish keyingi bosqichlarda qo'shiladi.
+- Qurilmalar: real-time onlayn ro'yxat va nom berish — `/devices/` (`ws/devices/`).
+- Ulanish rozilik: qurilmalar orasida so'rov/qabul/rad etish, 30s timeout.
+- Signaling (WebRTC) va fayl uzatish keyingi bosqichlarda qo'shiladi.
 
 ## Lokal ishga tushirish
 
@@ -22,7 +24,12 @@ cp .env.example .env   # SECRET_KEY, TELEGRAM_BOT_TOKEN va boshqalarni to'ldirin
 # PostgreSQL va Redis kerak (dev uchun): docker compose up -d
 python manage.py migrate
 python manage.py createsuperuser
+
+# HTTP-only tekshirish uchun:
 python manage.py runserver
+
+# WebSocket (qurilmalar, ulanish so'rovi) ishlashi uchun to'liq ASGI server kerak:
+daphne -b 0.0.0.0 -p 8000 config.asgi:application
 ```
 
 Telegram bot'ni alohida process sifatida ishga tushirish:

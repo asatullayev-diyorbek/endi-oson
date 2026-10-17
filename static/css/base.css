@@ -44,3 +44,31 @@ body {
 .status-error {
   color: #f85149;
 }
+
+.device-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+  text-align: left;
+}
+
+.device-list li {
+  padding: 10px 14px;
+  background: #1c1f26;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+#rename-form {
+  display: flex;
+  gap: 8px;
+}
+
+#rename-input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: #1c1f26;
+  color: #e6e6e6;
+}
