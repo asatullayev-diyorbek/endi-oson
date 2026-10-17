@@ -109,3 +109,37 @@ def log_transfer_outcome(
         file_name=file_name[:255],
         file_size=file_size,
     )
+
+
+_FINISHED_STATUSES = {
+    TransferLog.STATUS_COMPLETED,
+    TransferLog.STATUS_FAILED,
+    TransferLog.STATUS_REJECTED_NON_LOCAL,
+}
+
+
+def update_transfer_log_status(
+    log_id, device: Device, status: str, reason: str = ""
+) -> TransferLog:
+    """Mavjud TransferLog yozuvini yakunlaydi (masalan, "in_progress" -> "completed").
+
+    Alohida qator yaratish o'rniga bitta fayl uzatishning boshlanish/tugash
+    faktini bitta qatorda saqlaydi (started_at allaqachon bor, finished_at
+    shu yerda to'ldiriladi).
+    """
+    try:
+        log = TransferLog.objects.select_related("connection").get(id=log_id)
+    except TransferLog.DoesNotExist as exc:
+        raise ConnectionRequestError("Jurnal yozuvi topilmadi") from exc
+
+    connection = log.connection
+    if connection.from_device_id != device.id and connection.to_device_id != device.id:
+        raise ConnectionRequestError("Bu yozuvga ruxsatingiz yo'q")
+
+    log.status = status
+    if reason:
+        log.reason = reason[:255]
+    if status in _FINISHED_STATUSES:
+        log.finished_at = timezone.now()
+    log.save(update_fields=["status", "reason", "finished_at"])
+    return log

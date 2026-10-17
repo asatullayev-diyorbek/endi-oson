@@ -9,6 +9,7 @@ from .services import (
     get_accepted_connection,
     log_transfer_outcome,
     other_device_in_connection,
+    update_transfer_log_status,
 )
 
 pytestmark = pytest.mark.django_db
@@ -93,4 +94,52 @@ def test_log_transfer_outcome_rejects_non_participant():
             request_id=conn.id,
             status=TransferLog.STATUS_FAILED,
             local_verified=False,
+        )
+
+
+def test_update_transfer_log_status_marks_finished():
+    a = _make_device(51, "A")
+    b = _make_device(52, "B")
+    conn = ConnectionRequest.objects.create(
+        from_device=a, to_device=b, status=ConnectionRequest.STATUS_ACCEPTED
+    )
+    log = log_transfer_outcome(
+        device=a,
+        request_id=conn.id,
+        status=TransferLog.STATUS_IN_PROGRESS,
+        local_verified=True,
+        file_name="rasm.png",
+        file_size=1024,
+    )
+    assert log.finished_at is None
+
+    updated = update_transfer_log_status(
+        log_id=log.id, device=b, status=TransferLog.STATUS_COMPLETED
+    )
+
+    assert updated.id == log.id
+    assert updated.status == TransferLog.STATUS_COMPLETED
+    assert updated.finished_at is not None
+    # fayl nomi/hajmi boshlanishda yozilgani holicha qolishi kerak
+    assert updated.file_name == "rasm.png"
+    assert updated.file_size == 1024
+
+
+def test_update_transfer_log_status_rejects_non_participant():
+    a = _make_device(61, "A")
+    b = _make_device(62, "B")
+    stranger = _make_device(63, "Stranger")
+    conn = ConnectionRequest.objects.create(
+        from_device=a, to_device=b, status=ConnectionRequest.STATUS_ACCEPTED
+    )
+    log = log_transfer_outcome(
+        device=a,
+        request_id=conn.id,
+        status=TransferLog.STATUS_IN_PROGRESS,
+        local_verified=True,
+    )
+
+    with pytest.raises(ConnectionRequestError):
+        update_transfer_log_status(
+            log_id=log.id, device=stranger, status=TransferLog.STATUS_COMPLETED
         )

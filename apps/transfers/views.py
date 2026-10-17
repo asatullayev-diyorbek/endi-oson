@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST
 from apps.devices.models import Device
 
 from .models import TransferLog
-from .services import ConnectionRequestError, log_transfer_outcome
+from .services import ConnectionRequestError, log_transfer_outcome, update_transfer_log_status
 
 ALLOWED_STATUSES = {choice for choice, _ in TransferLog.STATUS_CHOICES}
 
@@ -36,16 +36,28 @@ def log_transfer(request):
     if not device:
         return JsonResponse({"error": "Qurilma topilmadi"}, status=404)
 
+    log_id = data.get("log_id")
+
     try:
-        log = log_transfer_outcome(
-            device=device,
-            request_id=data.get("request_id"),
-            status=status,
-            local_verified=bool(data.get("local_verified")),
-            reason=data.get("reason", ""),
-            file_name=data.get("file_name", ""),
-            file_size=data.get("file_size"),
-        )
+        if log_id:
+            # Mavjud ("in_progress") yozuvni yakunlaydi — yangi fayl nomi/hajmi
+            # kerak emas, chunki ular boshlanishda allaqachon yozilgan.
+            log = update_transfer_log_status(
+                log_id=log_id,
+                device=device,
+                status=status,
+                reason=data.get("reason", ""),
+            )
+        else:
+            log = log_transfer_outcome(
+                device=device,
+                request_id=data.get("request_id"),
+                status=status,
+                local_verified=bool(data.get("local_verified")),
+                reason=data.get("reason", ""),
+                file_name=data.get("file_name", ""),
+                file_size=data.get("file_size"),
+            )
     except ConnectionRequestError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 

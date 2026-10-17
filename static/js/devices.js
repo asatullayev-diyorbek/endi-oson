@@ -6,6 +6,12 @@
   const renameInput = document.getElementById("rename-input");
   const connectionLogEl = document.getElementById("connection-log");
   const incomingRequestEl = document.getElementById("incoming-request");
+  const transferPanelEl = document.getElementById("transfer-panel");
+  const fileInputEl = document.getElementById("file-input");
+  const sendFileBtn = document.getElementById("send-file-btn");
+  const progressFillEl = document.getElementById("progress-fill");
+  const transferStatusEl = document.getElementById("transfer-status");
+  const downloadAreaEl = document.getElementById("download-area");
 
   function guessDefaultLabel() {
     const ua = navigator.userAgent || "";
@@ -39,28 +45,32 @@
     return match ? decodeURIComponent(match[2]) : null;
   }
 
+  async function postTransferLog(payload) {
+    try {
+      const response = await fetch("/transfers/log/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCookie("csrftoken"),
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({ device_id: selfDeviceId, ...payload }),
+      });
+      return await response.json();
+    } catch {
+      return null; // audit yozuvi muvaffaqiyatsiz bo'lsa ham UI holati o'zgarmaydi
+    }
+  }
+
   function logTransferOutcome(requestId, status, localVerified, reason) {
-    fetch("/transfers/log/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRFToken": getCookie("csrftoken"),
-      },
-      credentials: "same-origin",
-      body: JSON.stringify({
-        device_id: selfDeviceId,
-        request_id: requestId,
-        status,
-        local_verified: localVerified,
-        reason: reason || "",
-      }),
-    }).catch(() => {
-      /* audit yozuvi muvaffaqiyatsiz bo'lsa ham ulanish holati o'zgarmaydi */
-    });
+    postTransferLog({ request_id: requestId, status, local_verified: localVerified, reason: reason || "" });
   }
 
   // request_id -> LocalOnlyPeer (5-bosqich, static/js/webrtc.js)
   const peers = new Map();
+  // request_id -> FileTransferSession (6-bosqich, static/js/transfer.js)
+  const fileSessions = new Map();
+  let activeRequestId = null;
 
   function getOrCreatePeer(requestId) {
     let peer = peers.get(requestId);
@@ -76,18 +86,82 @@
         connectionLogEl.textContent =
           "Lokal ulanish tasdiqlandi — fayl faqat lokal tarmoq orqali yuboriladi.";
         logTransferOutcome(requestId, "in_progress", true, "");
+        if (peer.controlChannel) {
+          attachFileTransfer(requestId, peer.controlChannel);
+        }
       },
       onRejected: (reason) => {
         connectionLogEl.textContent = `Lokal ulanish o'rnatilmadi — fayl internet orqali yuborilmaydi. (${reason})`;
         logTransferOutcome(requestId, "rejected_non_local", false, reason);
         peers.delete(requestId);
+        fileSessions.delete(requestId);
+        if (activeRequestId === requestId) {
+          activeRequestId = null;
+          transferPanelEl.hidden = true;
+        }
       },
-      onDataChannel: () => {
+      onDataChannel: (channel) => {
         connectionLogEl.textContent += " Control channel qabul qilindi.";
+        attachFileTransfer(requestId, channel);
       },
     });
     peers.set(requestId, peer);
     return peer;
+  }
+
+  function attachFileTransfer(requestId, channel) {
+    if (fileSessions.has(requestId)) return;
+
+    const create = () => {
+      const session = new FileTransferSession(channel, {
+        onProgress: (progress) => updateTransferProgress(progress),
+        onReceived: (file) => handleFileReceived(requestId, file),
+        onError: (message) => {
+          transferStatusEl.textContent = `Xatolik: ${message}`;
+        },
+        onCancelled: () => {
+          transferStatusEl.textContent = "Fayl uzatish bekor qilindi.";
+          progressFillEl.style.width = "0%";
+        },
+      });
+      fileSessions.set(requestId, session);
+      activeRequestId = requestId;
+      transferPanelEl.hidden = false;
+    };
+
+    if (channel.readyState === "open") {
+      create();
+    } else {
+      channel.addEventListener("open", create, { once: true });
+    }
+  }
+
+  function updateTransferProgress({ direction, sentBytes, receivedBytes, totalBytes }) {
+    const doneBytes = direction === "send" ? sentBytes : receivedBytes;
+    const percent = totalBytes ? Math.round((doneBytes / totalBytes) * 100) : 0;
+    progressFillEl.style.width = `${percent}%`;
+    transferStatusEl.textContent =
+      direction === "send" ? `Yuborilmoqda: ${percent}%` : `Qabul qilinmoqda: ${percent}%`;
+  }
+
+  function handleFileReceived(requestId, file) {
+    const url = URL.createObjectURL(file.blob);
+    downloadAreaEl.innerHTML = "";
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    link.className = "btn";
+    link.textContent = `${file.name} — yuklab olish`;
+    downloadAreaEl.appendChild(link);
+    transferStatusEl.textContent = `Qabul qilindi: ${file.name}`;
+
+    postTransferLog({
+      request_id: requestId,
+      status: "completed",
+      local_verified: true,
+      file_name: file.name,
+      file_size: file.size,
+    });
   }
 
   let selfDeviceId = getStoredDeviceId();
@@ -200,6 +274,38 @@
     socket.send(JSON.stringify({ type: "connection.respond", request_id: requestId, accept }));
     incomingRequestEl.hidden = true;
   }
+
+  sendFileBtn.addEventListener("click", async () => {
+    if (!activeRequestId) return;
+    const file = fileInputEl.files[0];
+    if (!file) return;
+
+    const session = fileSessions.get(activeRequestId);
+    if (!session) return;
+
+    sendFileBtn.disabled = true;
+    transferStatusEl.textContent = `Yuborilmoqda: ${file.name}`;
+
+    const startResult = await postTransferLog({
+      request_id: activeRequestId,
+      status: "in_progress",
+      local_verified: true,
+      file_name: file.name,
+      file_size: file.size,
+    });
+    const logId = startResult?.log_id;
+
+    try {
+      await session.sendFile(file);
+      transferStatusEl.textContent = `Yuborildi: ${file.name}`;
+      if (logId) await postTransferLog({ log_id: logId, status: "completed" });
+    } catch (err) {
+      transferStatusEl.textContent = `Xatolik: ${err.message}`;
+      if (logId) await postTransferLog({ log_id: logId, status: "failed", reason: String(err) });
+    } finally {
+      sendFileBtn.disabled = false;
+    }
+  });
 
   renameForm.addEventListener("submit", (event) => {
     event.preventDefault();

@@ -5,7 +5,7 @@ Qurilmalar orasida fayllarni **100% lokal tarmoq** ichida uzatish xizmati,
 
 To'liq implementatsiya rejasi: `docs/PLAN.md`.
 
-## Hozirgi holat (0–5-bosqich)
+## Hozirgi holat (0–6-bosqich)
 
 - Django loyiha skeleti (ASGI, Channels, custom `User` modeli).
 - Telegram orqali bir martalik token login oqimi: `/auth/telegram/login/`.
@@ -15,7 +15,9 @@ To'liq implementatsiya rejasi: `docs/PLAN.md`.
   tasdiqlangan ulanish doirasida relay qilinadi, `getStats()` orqali
   host-candidate + private-IPv4 davomiy tekshiruvi, muvaffaqiyatsiz bo'lsa
   `TransferLog.rejected_non_local` audit yozuvi (`/transfers/log/`).
-- Fayl uzatishning o'zi (DataChannel orqali chunking) 6-bosqichda qo'shiladi.
+- Fayl uzatish: DataChannel orqali bo'lak-bo'lak (chunk) yuborish,
+  backpressure (`bufferedAmountLowThreshold`), progress bar, CRC32 yaxlitlik
+  tekshiruvi va bekor qilish — hammasi `/devices/` sahifasida.
 
 ## Lokal ishga tushirish
 
@@ -45,8 +47,8 @@ python manage.py runbot
 ## Testlar
 
 ```bash
-pytest                              # Django/Channels backend
-node --test static/js/webrtc.test.js  # Lokal-only tekshiruv mantiqi (JS)
+pytest                       # Django/Channels backend
+node --test static/js/*.test.js  # Lokal-only tekshiruv + fayl uzatish protokoli (JS)
 ```
 
 ## Muhim cheklov: "100% lokal" kafolati

@@ -15,6 +15,16 @@
     <button type="submit" class="btn">Saqlash</button>
   </form>
 
+  <div id="transfer-panel" class="transfer-panel" hidden>
+    <h2>Fayl yuborish</h2>
+    <input type="file" id="file-input">
+    <button id="send-file-btn" class="btn">Yuborish</button>
+    <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
+    <p id="transfer-status"></p>
+    <div id="download-area"></div>
+  </div>
+
   <script src="/static/js/webrtc.js"></script>
+  <script src="/static/js/transfer.js"></script>
   <script src="/static/js/devices.js"></script>
 {% endblock %}
