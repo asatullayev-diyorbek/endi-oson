@@ -1,0 +1,46 @@
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: #0f1115;
+  color: #e6e6e6;
+  display: flex;
+  min-height: 100vh;
+  margin: 0;
+}
+
+.container {
+  margin: auto;
+  max-width: 420px;
+  padding: 24px;
+  text-align: center;
+}
+
+.btn {
+  display: inline-block;
+  background: #2aabee;
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+#status {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #9aa0a6;
+}
+
+.status-confirmed {
+  color: #3fb950;
+}
+
+.status-error {
+  color: #f85149;
+}

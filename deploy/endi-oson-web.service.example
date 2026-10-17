@@ -1,0 +1,13 @@
+[Unit]
+Description=Endi Oson - Django ASGI (Daphne)
+After=network.target postgresql.service redis.service
+
+[Service]
+User=www-data
+WorkingDirectory=/opt/endi-oson
+EnvironmentFile=/opt/endi-oson/.env
+ExecStart=/opt/endi-oson/.venv/bin/daphne -b 127.0.0.1 -p 8001 config.asgi:application
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

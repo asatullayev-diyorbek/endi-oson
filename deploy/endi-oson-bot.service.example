@@ -1,0 +1,13 @@
+[Unit]
+Description=Endi Oson - Telegram bot
+After=network.target endi-oson-web.service
+
+[Service]
+User=www-data
+WorkingDirectory=/opt/endi-oson
+EnvironmentFile=/opt/endi-oson/.env
+ExecStart=/opt/endi-oson/.venv/bin/python manage.py runbot
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
