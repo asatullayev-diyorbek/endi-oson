@@ -3,7 +3,7 @@
 Qurilmalar orasida fayllarni **100% lokal tarmoq** ichida uzatish xizmati,
 **Telegram orqali kirish** bilan.
 
-To'liq implementatsiya rejasi: `docs/PLAN.md`.
+To'liq implementatsiya rejasi: `docs/PLAN.md`. Deploy qo'llanmasi (Render.com): `docs/DEPLOY_RENDER.md`.
 
 ## Hozirgi holat (0–6-bosqich)
 

@@ -1,0 +1,114 @@
+# Render.com Blueprint — https://render.com/docs/blueprint-spec
+#
+# Nega Vercel emas: bu ilova WebSocket (Django Channels — qurilmalar
+# presence, ulanish so'rovi, WebRTC signaling) va doimiy ishlaydigan
+# Telegram bot process'iga tayanadi. Vercel'ning serverless Python
+# funksiyalari ikkisini ham qo'llamaydi. Render esa uzoq muddatli ASGI
+# (Daphne) web-servisi va alohida background worker'ni birga ishlatishga
+# imkon beradi.
+#
+# Qo'llanma: Render dashboard -> New -> Blueprint -> shu repo'ni tanlang.
+# Deploy'dan oldin quyidagi "sync: false" maydonlarni dashboard'da qo'lda
+# to'ldirishingiz kerak bo'ladi: TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME.
+#
+# MUHIM narx eslatmasi: "worker" (Telegram bot) uchun Render'da bepul tarif
+# yo'q — kamida "starter" rejasi kerak bo'ladi. "web" va Postgres/Key Value
+# bepul tarifda ishga tushirilgan, lekin: bepul web-servis 15 daqiqa
+# harakatsizlikdan keyin "uxlaydi" (keyingi so'rovda sovuq boshlanish —
+# WebSocket ulanishi uzilib qolishi mumkin), bepul Postgres ~30 kundan keyin
+# muddati tugaydi. Jiddiy/doimiy foydalanish uchun web'ni ham "starter"ga
+# o'tkazish tavsiya etiladi.
+
+databases:
+  - name: endi-oson-db
+    plan: free
+    region: frankfurt
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: endi-oson-web
+    runtime: python
+    plan: free
+    region: frankfurt
+    branch: main
+    buildCommand: >
+      pip install -r requirements.txt &&
+      python manage.py collectstatic --noinput &&
+      python manage.py migrate
+    startCommand: daphne -b 0.0.0.0 -p $PORT config.asgi:application
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.6
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.prod
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://*.onrender.com"
+      - key: SITE_ORIGIN
+        value: "https://endi-oson-web.onrender.com"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: endi-oson-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: endi-oson-redis
+          property: connectionString
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        sync: false
+
+  - type: worker
+    name: endi-oson-bot
+    runtime: python
+    plan: starter
+    region: frankfurt
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python manage.py runbot
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.6
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.prod
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: endi-oson-web
+          envVarKey: SECRET_KEY
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://*.onrender.com"
+      - key: SITE_ORIGIN
+        value: "https://endi-oson-web.onrender.com"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: endi-oson-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: endi-oson-redis
+          property: connectionString
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        sync: false
+
+  - type: keyvalue
+    name: endi-oson-redis
+    plan: free
+    region: frankfurt
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
