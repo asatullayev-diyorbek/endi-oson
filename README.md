@@ -5,13 +5,17 @@ Qurilmalar orasida fayllarni **100% lokal tarmoq** ichida uzatish xizmati,
 
 To'liq implementatsiya rejasi: `docs/PLAN.md`.
 
-## Hozirgi holat (0–4-bosqich)
+## Hozirgi holat (0–5-bosqich)
 
 - Django loyiha skeleti (ASGI, Channels, custom `User` modeli).
 - Telegram orqali bir martalik token login oqimi: `/auth/telegram/login/`.
 - Qurilmalar: real-time onlayn ro'yxat va nom berish — `/devices/` (`ws/devices/`).
 - Ulanish rozilik: qurilmalar orasida so'rov/qabul/rad etish, 30s timeout.
-- Signaling (WebRTC) va fayl uzatish keyingi bosqichlarda qo'shiladi.
+- Lokal-only WebRTC: STUN/TURN'siz `RTCPeerConnection`, signaling faqat
+  tasdiqlangan ulanish doirasida relay qilinadi, `getStats()` orqali
+  host-candidate + private-IPv4 davomiy tekshiruvi, muvaffaqiyatsiz bo'lsa
+  `TransferLog.rejected_non_local` audit yozuvi (`/transfers/log/`).
+- Fayl uzatishning o'zi (DataChannel orqali chunking) 6-bosqichda qo'shiladi.
 
 ## Lokal ishga tushirish
 
@@ -41,7 +45,8 @@ python manage.py runbot
 ## Testlar
 
 ```bash
-pytest
+pytest                              # Django/Channels backend
+node --test static/js/webrtc.test.js  # Lokal-only tekshiruv mantiqi (JS)
 ```
 
 ## Muhim cheklov: "100% lokal" kafolati

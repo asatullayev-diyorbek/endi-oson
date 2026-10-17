@@ -8,6 +8,8 @@ from apps.transfers.services import (
     ConnectionRequestError,
     create_connection_request,
     expire_if_still_pending,
+    get_accepted_connection,
+    other_device_in_connection,
     respond_to_connection_request,
 )
 
@@ -69,6 +71,8 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
             await self._handle_connection_request(content)
         elif msg_type == "connection.respond":
             await self._handle_connection_respond(content)
+        elif msg_type == "signaling.relay":
+            await self._handle_signaling_relay(content)
 
     async def device_list_push(self, event):
         await self.send_json(event["payload"])
@@ -128,6 +132,42 @@ class DeviceConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(event)
 
     async def connection_response(self, event):
+        await self.send_json(event)
+
+    # --- WebRTC signaling (5-bosqich) -------------------------------------
+    #
+    # Faqat SDP offer/answer va ICE candidate JSON paketlarini relay qiladi —
+    # fayl baytlari bu yerdan HECH QACHON o'tmaydi. Target qurilma
+    # client'dan emas, faqat tasdiqlangan ConnectionRequest'dan aniqlanadi —
+    # shunday qilib begona qurilma boshqalar orasiga signaling xabari
+    # in'ektsiya qila olmaydi.
+
+    async def _handle_signaling_relay(self, content):
+        request_id = content.get("request_id")
+        payload = content.get("payload")
+
+        try:
+            target_channel = await sync_to_async(self._resolve_signaling_target)(request_id)
+        except ConnectionRequestError as exc:
+            await self.send_json({"type": "connection.error", "error": str(exc)})
+            return
+
+        if target_channel:
+            await self.channel_layer.send(
+                target_channel,
+                {
+                    "type": "signaling.relay",
+                    "request_id": request_id,
+                    "payload": payload,
+                },
+            )
+
+    def _resolve_signaling_target(self, request_id):
+        connection = get_accepted_connection(request_id, self.device)
+        target = other_device_in_connection(connection, self.device)
+        return target.channel_name
+
+    async def signaling_relay(self, event):
         await self.send_json(event)
 
     async def _watch_timeout(self, request_id):

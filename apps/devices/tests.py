@@ -121,6 +121,67 @@ async def test_connection_request_times_out():
     await comm_b.disconnect()
 
 
+@pytest.mark.asyncio
+async def test_signaling_relay_forwards_between_accepted_devices():
+    user_a = await _async_create_user(4001)
+    user_b = await _async_create_user(4002)
+
+    comm_a = await _connect(user_a, label="A")
+    await comm_a.receive_json_from(timeout=5)
+    await comm_a.receive_json_from(timeout=5)
+
+    comm_b = await _connect(user_b, label="B")
+    self_b = await comm_b.receive_json_from(timeout=5)
+    device_b_id = self_b["device_id"]
+    await comm_b.receive_json_from(timeout=5)
+
+    await comm_a.send_json_to({"type": "connection.request", "to_device_id": device_b_id})
+    request_evt = await comm_b.receive_json_from(timeout=5)
+    request_id = request_evt["request_id"]
+
+    await comm_b.send_json_to(
+        {"type": "connection.respond", "request_id": request_id, "accept": True}
+    )
+    await comm_a.receive_json_from(timeout=5)  # connection.response: accepted
+
+    offer_payload = {"kind": "offer", "sdp": "fake-sdp"}
+    await comm_a.send_json_to(
+        {"type": "signaling.relay", "request_id": request_id, "payload": offer_payload}
+    )
+
+    relay_evt = await comm_b.receive_json_from(timeout=5)
+    assert relay_evt == {
+        "type": "signaling.relay",
+        "request_id": request_id,
+        "payload": offer_payload,
+    }
+
+    await comm_a.disconnect()
+    await comm_b.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_signaling_relay_rejects_request_without_accepted_connection():
+    user_a = await _async_create_user(5001)
+
+    comm_a = await _connect(user_a, label="A")
+    await comm_a.receive_json_from(timeout=5)
+    await comm_a.receive_json_from(timeout=5)
+
+    await comm_a.send_json_to(
+        {
+            "type": "signaling.relay",
+            "request_id": 999999,
+            "payload": {"kind": "offer", "sdp": "x"},
+        }
+    )
+
+    error_evt = await comm_a.receive_json_from(timeout=5)
+    assert error_evt["type"] == "connection.error"
+
+    await comm_a.disconnect()
+
+
 async def _async_create_user(telegram_user_id):
     from asgiref.sync import sync_to_async
 

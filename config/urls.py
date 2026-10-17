@@ -7,5 +7,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("auth/telegram/", include("apps.telegram_auth.urls")),
     path("devices/", include("apps.devices.urls")),
+    path("transfers/", include("apps.transfers.urls")),
     path("", accounts_views.home, name="home"),
 ]

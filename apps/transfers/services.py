@@ -1,9 +1,10 @@
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.devices.models import Device
 
-from .models import ConnectionRequest
+from .models import ConnectionRequest, TransferLog
 
 
 class ConnectionRequestError(Exception):
@@ -59,3 +60,52 @@ def expire_if_still_pending(request_id):
     request.responded_at = timezone.now()
     request.save(update_fields=["status", "responded_at"])
     return request
+
+
+def get_accepted_connection(request_id, device: Device) -> ConnectionRequest:
+    """Signaling (5-bosqich) faqat tasdiqlangan ulanish doirasida ishlashi uchun.
+
+    `device` so'ralgan ConnectionRequest'ning ikki tarafidan biri bo'lishi
+    shart — aks holda begona qurilma boshqa birovlar orasiga signaling
+    xabari in'ektsiya qila olmasligi kerak.
+    """
+    try:
+        connection = ConnectionRequest.objects.get(
+            id=request_id, status=ConnectionRequest.STATUS_ACCEPTED
+        )
+    except ConnectionRequest.DoesNotExist as exc:
+        raise ConnectionRequestError("Ulanish topilmadi yoki tasdiqlanmagan") from exc
+
+    if connection.from_device_id != device.id and connection.to_device_id != device.id:
+        raise ConnectionRequestError("Bu ulanishga ruxsatingiz yo'q")
+
+    return connection
+
+
+def other_device_in_connection(connection: ConnectionRequest, device: Device) -> Device:
+    return connection.to_device if connection.from_device_id == device.id else connection.from_device
+
+
+def log_transfer_outcome(
+    device: Device,
+    request_id,
+    status: str,
+    local_verified: bool,
+    reason: str = "",
+    file_name: str = "",
+    file_size=None,
+) -> TransferLog:
+    connection = ConnectionRequest.objects.filter(
+        Q(from_device=device) | Q(to_device=device), id=request_id
+    ).first()
+    if not connection:
+        raise ConnectionRequestError("Ulanish topilmadi")
+
+    return TransferLog.objects.create(
+        connection=connection,
+        status=status,
+        local_verified=local_verified,
+        reason=reason[:255],
+        file_name=file_name[:255],
+        file_size=file_size,
+    )

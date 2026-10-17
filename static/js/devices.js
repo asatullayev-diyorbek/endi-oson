@@ -34,6 +34,62 @@
     }
   }
 
+  function getCookie(name) {
+    const match = document.cookie.match(new RegExp(`(^|; )${name}=([^;]+)`));
+    return match ? decodeURIComponent(match[2]) : null;
+  }
+
+  function logTransferOutcome(requestId, status, localVerified, reason) {
+    fetch("/transfers/log/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCookie("csrftoken"),
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        device_id: selfDeviceId,
+        request_id: requestId,
+        status,
+        local_verified: localVerified,
+        reason: reason || "",
+      }),
+    }).catch(() => {
+      /* audit yozuvi muvaffaqiyatsiz bo'lsa ham ulanish holati o'zgarmaydi */
+    });
+  }
+
+  // request_id -> LocalOnlyPeer (5-bosqich, static/js/webrtc.js)
+  const peers = new Map();
+
+  function getOrCreatePeer(requestId) {
+    let peer = peers.get(requestId);
+    if (peer) return peer;
+
+    peer = new LocalOnlyPeer({
+      send: (payload) => {
+        socket.send(
+          JSON.stringify({ type: "signaling.relay", request_id: requestId, payload })
+        );
+      },
+      onLocalVerified: () => {
+        connectionLogEl.textContent =
+          "Lokal ulanish tasdiqlandi — fayl faqat lokal tarmoq orqali yuboriladi.";
+        logTransferOutcome(requestId, "in_progress", true, "");
+      },
+      onRejected: (reason) => {
+        connectionLogEl.textContent = `Lokal ulanish o'rnatilmadi — fayl internet orqali yuborilmaydi. (${reason})`;
+        logTransferOutcome(requestId, "rejected_non_local", false, reason);
+        peers.delete(requestId);
+      },
+      onDataChannel: () => {
+        connectionLogEl.textContent += " Control channel qabul qilindi.";
+      },
+    });
+    peers.set(requestId, peer);
+    return peer;
+  }
+
   let selfDeviceId = getStoredDeviceId();
   const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const params = new URLSearchParams();
@@ -77,6 +133,14 @@
 
     if (data.type === "connection.response") {
       connectionLogEl.textContent = `So'rov holati: ${data.status}`;
+      if (data.status === "accepted") {
+        startSignalingAsCaller(data.request_id);
+      }
+      return;
+    }
+
+    if (data.type === "signaling.relay") {
+      getOrCreatePeer(data.request_id).handleRemoteMessage(data.payload);
       return;
     }
 
@@ -84,6 +148,12 @@
       connectionLogEl.textContent = `Xatolik: ${data.error}`;
     }
   });
+
+  async function startSignalingAsCaller(requestId) {
+    const peer = getOrCreatePeer(requestId);
+    peer.createControlChannel();
+    await peer.createOffer();
+  }
 
   function renderDevices(devices) {
     listEl.innerHTML = "";
